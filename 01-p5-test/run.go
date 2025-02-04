@@ -10,8 +10,8 @@ import (
 
 type ball struct {
 	pos      []float64
-	r        float64
 	velocity []float64
+	r        float64
 }
 
 var (
@@ -32,8 +32,8 @@ func setup() {
 	for range ballCount {
 		balls = append(balls, &ball{
 			pos:      []float64{p5.Random(0, float64(screenWidth)), p5.Random(0, float64(screenWidth))},
-			r:        10,
 			velocity: []float64{p5.Random(-2, 2), p5.Random(-2, 2)},
+			r:        10,
 		})
 	}
 }
@@ -64,11 +64,23 @@ func update() {
 			ball.pos[1] = float64(screenHeight) - ball.r
 			ball.velocity[1] = -ball.velocity[1]
 		}
-		//
-		// // Naively iterate over all balls for collision
-		// for j, otherBall := range balls {
-		// 	// don't collide with self
-		// 	if i != j {
+
+		// Naively iterate over all balls for collision
+		for j, ball2 := range balls {
+			// don't collide with self
+			if i != j {
+				deltaVec := vek.Sub(ball.pos, ball2.pos)
+				deltaMag := vek.Abs()			
+				minBump := vek.MulNumber(((ball.r + ball2.r)-deltaMag)/deltaMag, deltaVec)
+				
+				invMass1 = 1 / (math.Pi * math.Pow(ball.r, 2))
+				invMass2 = 1 / (math.Pi * math.Pow(ball2.r, 2))
+
+				vek.Add_Into(ball.pos, vek.MulNumber(invMass1/(invMass1 + invMass2), minBump))
+				
+			}
+
+
 		// 		if distance(ball.pos[0], ball.pos[1], otherBall.pos[0], otherBall.pos[1]) < (ball.r + otherBall.r) {
 		// 			// Calculate difference between centres
 		// 			dAngle, dMag := vectorXYtoAngleMag(otherBall.pos[0]-ball.pos[0], otherBall.pos[1]-ball.pos[1])
