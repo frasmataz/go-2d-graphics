@@ -5,21 +5,20 @@ import (
 	"math"
 
 	"github.com/go-p5/p5"
+	"github.com/viterin/vek"
 )
 
 type ball struct {
-	x  float64
-	y  float64
-	r  float64
-	vx float64
-	vy float64
+	pos      []float64
+	r        float64
+	velocity []float64
 }
 
 var (
 	screenWidth  = 500
 	screenHeight = 500
 	ballCount    = 50
-	balls        [50]*ball
+	balls        []*ball
 )
 
 func main() {
@@ -30,48 +29,71 @@ func setup() {
 	p5.Canvas(screenHeight, screenWidth)
 	p5.Background(color.Gray{Y: 220})
 
-	for i := range ballCount {
-		balls[i] = &ball{
-			x:  p5.Random(0, float64(screenWidth)),
-			y:  p5.Random(0, float64(screenWidth)),
-			r:  10,
-			vx: p5.Random(-2, 2),
-			vy: p5.Random(-2, 2),
-		}
+	for range ballCount {
+		balls = append(balls, &ball{
+			pos:      []float64{p5.Random(0, float64(screenWidth)), p5.Random(0, float64(screenWidth))},
+			r:        10,
+			velocity: []float64{p5.Random(-2, 2), p5.Random(-2, 2)},
+		})
 	}
 }
 
 func update() {
-	for i, ball := range balls {
-		// Bounce of walls
-		if ball.x < 0 || ball.x > float64(screenWidth) {
-			ball.vx = -ball.vx
+	for _, ball := range balls {
+		// Bounce off walls
+		// Left wall
+		if ball.pos[0]-ball.r < 0 {
+			ball.pos[0] = ball.r
+			ball.velocity[0] = -ball.velocity[0]
 		}
-		if ball.y < 0 || ball.y > float64(screenWidth) {
-			ball.vy = -ball.vy
+
+		// Right wall
+		if ball.pos[0]+ball.r > float64(screenWidth) {
+			ball.pos[0] = float64(screenWidth) - ball.r
+			ball.velocity[0] = -ball.velocity[0]
 		}
 
-		ball.x += ball.vx
-		ball.y += ball.vy
-
-		// Naively iterate over all balls for collision
-		for j, otherBall := range balls {
-			// don't collide with self
-			if i != j {
-				if distance(ball.x, ball.y, otherBall.x, otherBall.y) < (ball.r + otherBall.r) {
-					vAngle, vMag := vectorXYtoAngleMag(ball.vx, ball.vy)
-					dAngle, _ := vectorXYtoAngleMag(otherBall.x-ball.x, otherBall.y-ball.y)
-
-					newVAngle := vAngle + (dAngle + math.Pi)
-
-					newVx, newVy := vectorAngleMagtoXY(newVAngle, vMag)
-					ball.vx = newVx
-					ball.vy = newVy
-					ball.x += ball.vx
-					ball.y += ball.vy
-				}
-			}
+		// Top wall
+		if ball.pos[1]-ball.r < 0 {
+			ball.pos[1] = ball.r
+			ball.velocity[1] = -ball.velocity[1]
 		}
+
+		// Bottom wall
+		if ball.pos[1]+ball.r > float64(screenHeight) {
+			ball.pos[1] = float64(screenHeight) - ball.r
+			ball.velocity[1] = -ball.velocity[1]
+		}
+		//
+		// // Naively iterate over all balls for collision
+		// for j, otherBall := range balls {
+		// 	// don't collide with self
+		// 	if i != j {
+		// 		if distance(ball.pos[0], ball.pos[1], otherBall.pos[0], otherBall.pos[1]) < (ball.r + otherBall.r) {
+		// 			// Calculate difference between centres
+		// 			dAngle, dMag := vectorXYtoAngleMag(otherBall.pos[0]-ball.pos[0], otherBall.pos[1]-ball.pos[1])
+		//
+		// 			// Bump balls away from each other
+		// 			targetBallDistance := ball.r + otherBall.r
+		//
+		// 			overlap := targetBallDistance - dMag
+		//
+		// 			thisBallBumpx, thisBallBumpy := vectorAngleMagtoXY(dAngle, overlap/2)
+		// 			otherBallBumpx, otherBallBumpy := vectorAngleMagtoXY(dAngle, overlap/2)
+		//
+		// 			ball.pos[0] += thisBallBumpx
+		// 			ball.pos[1] += thisBallBumpy
+		//
+		// 			otherBall.pos[0] += otherBallBumpx
+		// 			otherBall.pos[1] += otherBallBumpy
+		//
+		// 			ball.va = ball.va + (dAngle + math.Pi)
+		// 			otherBall.va = otherBall.va + dAngle
+		// 		}
+		// 	}
+		// }
+
+		vek.Add_Inplace(ball.pos, ball.velocity)
 	}
 }
 
@@ -82,7 +104,7 @@ func draw() {
 	p5.Fill(color.RGBA{R: 255, G: 50, B: 180, A: 208})
 
 	for _, ball := range balls {
-		p5.Circle(ball.x, ball.y, ball.r*2)
+		p5.Circle(ball.pos[0], ball.pos[1], ball.r*2)
 	}
 }
 
