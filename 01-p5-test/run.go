@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"log"
 	"math"
 
 	"github.com/go-p5/p5"
@@ -15,10 +16,11 @@ type ball struct {
 }
 
 var (
-	screenWidth  = 200
-	screenHeight = 200
-	ballCount    = 100
+	screenWidth  = 1000
+	screenHeight = 1000
+	ballCount    = 50
 	balls        []*ball
+	bounciness   = 1.0001
 )
 
 func main() {
@@ -27,13 +29,14 @@ func main() {
 
 func setup() {
 	p5.Canvas(screenHeight, screenWidth)
-	p5.Background(color.Gray{Y: 220})
+	p5.Background(color.Gray{Y: 80})
 
 	for range ballCount {
+		size := p5.Random(20, 80)
 		balls = append(balls, &ball{
 			pos:      []float64{p5.Random(0, float64(screenWidth)), p5.Random(0, float64(screenWidth))},
-			velocity: []float64{p5.Random(-2, 2), p5.Random(-2, 2)},
-			r:        10,
+			velocity: vek.MulNumber([]float64{p5.Random(-100, 100), p5.Random(-100, 100)}, 1/size),
+			r:        size,
 		})
 	}
 }
@@ -69,42 +72,43 @@ func update() {
 		for j, ball2 := range balls {
 			// don't collide with self
 			if i != j && vek.Norm(vek.Sub(ball.pos, ball2.pos)) < ball.r+ball2.r {
+				// Get vector between circle centres
 				deltaVec := vek.Sub(ball.pos, ball2.pos)
 				deltaMag := vek.Norm(deltaVec)
-				minBump := vek.MulNumber(deltaVec, ((ball.r+ball2.r)-deltaMag)/deltaMag)
 
-				invMass1 := 1 / (math.Pi * math.Pow(ball.r, 2))
-				invMass2 := 1 / (math.Pi * math.Pow(ball2.r, 2))
+				// Bump circles off each other
+				nudge := vek.MulNumber(deltaVec, ((ball.r+ball2.r)-deltaMag)/deltaMag)
 
-				vek.Add_Inplace(ball.pos, vek.MulNumber(minBump, invMass1/(invMass1+invMass2)))
+				invMass1 := 1 / (math.Pi * math.Pow(ball.r, 2) * 10)
+				invMass2 := 1 / (math.Pi * math.Pow(ball2.r, 2*10))
 
+				vek.Add_Inplace(ball.pos, vek.MulNumber(nudge, invMass1/(invMass1+invMass2)))
+				vek.Sub_Inplace(ball2.pos, vek.MulNumber(nudge, invMass1/(invMass1+invMass2)))
+
+				// Ricochet balls off each other
+				deltaVelocity := vek.Sub(ball.velocity, ball2.velocity)
+				deltaVelocityMag := vek.Dot(nudge, deltaVelocity)
+
+				log.Printf("minBump: %v, delta: %v", nudge, deltaVelocity)
+
+				// If balls not moving away from each other already
+				if deltaVelocityMag < 0.0 {
+					log.Println("collide")
+					impulseForce := (deltaVelocityMag) / (invMass1 + invMass2)
+					impulseVec := vek.MulNumber(nudge, impulseForce)
+
+					log.Printf("impulseForce: %v", impulseForce)
+					log.Printf("impulseVec: %v", impulseVec)
+
+					log.Printf("vel before: %v", ball.velocity)
+					vek.Add_Inplace(ball.velocity, vek.MulNumber(impulseVec, invMass1))
+					vek.Sub_Inplace(ball2.velocity, vek.MulNumber(impulseVec, invMass2))
+					log.Printf("vel after: %v", ball.velocity)
+				}
+
+				log.Println("done colliding")
 			}
 		}
-
-		// 		if distance(ball.pos[0], ball.pos[1], otherBall.pos[0], otherBall.pos[1]) < (ball.r + otherBall.r) {
-		// 			// Calculate difference between centres
-		// 			dAngle, dMag := vectorXYtoAngleMag(otherBall.pos[0]-ball.pos[0], otherBall.pos[1]-ball.pos[1])
-		//
-		// 			// Bump balls away from each other
-		// 			targetBallDistance := ball.r + otherBall.r
-		//
-		// 			overlap := targetBallDistance - dMag
-		//
-		// 			thisBallBumpx, thisBallBumpy := vectorAngleMagtoXY(dAngle, overlap/2)
-		// 			otherBallBumpx, otherBallBumpy := vectorAngleMagtoXY(dAngle, overlap/2)
-		//
-		// 			ball.pos[0] += thisBallBumpx
-		// 			ball.pos[1] += thisBallBumpy
-		//
-		// 			otherBall.pos[0] += otherBallBumpx
-		// 			otherBall.pos[1] += otherBallBumpy
-		//
-		// 			ball.va = ball.va + (dAngle + math.Pi)
-		// 			otherBall.va = otherBall.va + dAngle
-		// 		}
-		// 	}
-		// }
-
 		vek.Add_Inplace(ball.pos, ball.velocity)
 	}
 }
