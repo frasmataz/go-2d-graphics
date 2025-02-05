@@ -15,9 +15,9 @@ type ball struct {
 }
 
 var (
-	screenWidth  = 500
-	screenHeight = 500
-	ballCount    = 50
+	screenWidth  = 200
+	screenHeight = 200
+	ballCount    = 100
 	balls        []*ball
 )
 
@@ -39,7 +39,7 @@ func setup() {
 }
 
 func update() {
-	for _, ball := range balls {
+	for i, ball := range balls {
 		// Bounce off walls
 		// Left wall
 		if ball.pos[0]-ball.r < 0 {
@@ -68,18 +68,18 @@ func update() {
 		// Naively iterate over all balls for collision
 		for j, ball2 := range balls {
 			// don't collide with self
-			if i != j {
+			if i != j && vek.Norm(vek.Sub(ball.pos, ball2.pos)) < ball.r+ball2.r {
 				deltaVec := vek.Sub(ball.pos, ball2.pos)
-				deltaMag := vek.Abs()			
-				minBump := vek.MulNumber(((ball.r + ball2.r)-deltaMag)/deltaMag, deltaVec)
-				
-				invMass1 = 1 / (math.Pi * math.Pow(ball.r, 2))
-				invMass2 = 1 / (math.Pi * math.Pow(ball2.r, 2))
+				deltaMag := vek.Norm(deltaVec)
+				minBump := vek.MulNumber(deltaVec, ((ball.r+ball2.r)-deltaMag)/deltaMag)
 
-				vek.Add_Into(ball.pos, vek.MulNumber(invMass1/(invMass1 + invMass2), minBump))
-				
+				invMass1 := 1 / (math.Pi * math.Pow(ball.r, 2))
+				invMass2 := 1 / (math.Pi * math.Pow(ball2.r, 2))
+
+				vek.Add_Inplace(ball.pos, vek.MulNumber(minBump, invMass1/(invMass1+invMass2)))
+
 			}
-
+		}
 
 		// 		if distance(ball.pos[0], ball.pos[1], otherBall.pos[0], otherBall.pos[1]) < (ball.r + otherBall.r) {
 		// 			// Calculate difference between centres
