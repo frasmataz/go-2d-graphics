@@ -19,8 +19,8 @@ var (
 	screenHeight = 1000
 	ballCount    = 80
 	balls        []*ball
-	bounciness   = 0.9
-	gravity      = 0.3
+	bounciness   = 0.8
+	gravity      = 0.0
 )
 
 func main() {
@@ -32,7 +32,7 @@ func setup() {
 	p5.Background(color.Gray{Y: 80})
 
 	for range ballCount {
-		size := p5.Random(20, 40)
+		size := p5.Random(5, 40)
 		balls = append(balls, &ball{
 			pos:      []float64{p5.Random(0, float64(screenWidth)), p5.Random(0, float64(screenWidth))},
 			velocity: vek.MulNumber([]float64{p5.Random(-200, 200), p5.Random(-200, 200)}, 1/size),
@@ -98,6 +98,7 @@ func update() {
 
 				// If balls are approaching:
 				if (vx21*x21 + vy21*y21) < 0 {
+					// Calculate bounce
 					a := y21 / x21
 					dvx2 := -2 * (vx21 + a*vy21) / ((1 + a*a) * (1 + m21))
 					vx2 := ball2.velocity[0] + dvx2
@@ -105,12 +106,15 @@ func update() {
 					vx1 := ball.velocity[0] - m21*dvx2
 					vy1 := ball.velocity[1] - a*m21*dvx2
 
+					// Set resulting new velocities
 					ball.velocity = []float64{vx1, vy1}
 					ball2.velocity = []float64{vx2, vy2}
 
+					// Work out proportion of damping according to relative masses
 					ball1DampingVec := vek.DivNumber(vek.MulNumber(ball.velocity, mass1), (mass1 + mass2))
 					ball2DampingVec := vek.DivNumber(vek.MulNumber(ball2.velocity, mass2), (mass1 + mass2))
 
+					// Apply damping vectors scaled by bounciness parameter
 					ball.velocity = vek.Add(vek.MulNumber(vek.Sub(ball.velocity, ball1DampingVec), bounciness), ball1DampingVec)
 					ball2.velocity = vek.Add(vek.MulNumber(vek.Sub(ball2.velocity, ball2DampingVec), bounciness), ball2DampingVec)
 				}
