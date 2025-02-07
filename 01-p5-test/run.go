@@ -19,8 +19,8 @@ var (
 	screenHeight = 800
 	ballCount    = 120
 	balls        []*ball
-	bounciness   = 0.9
-	gravity      = 0.3
+	bounciness   = 0.8
+	gravity      = 0.1
 )
 
 func main() {
@@ -115,7 +115,12 @@ func update() {
 					ball2DampingVec := vek.DivNumber(vek.MulNumber(ball2.velocity, mass2), (mass1 + mass2))
 
 					// Apply damping vectors scaled by bounciness parameter
-					ball.velocity = vek.Add(vek.MulNumber(vek.Sub(ball.velocity, ball1DampingVec), bounciness), ball1DampingVec)
+					ball.velocity =
+						vek.Add(
+							vek.MulNumber(
+								vek.Sub(ball.velocity, ball1DampingVec),
+								bounciness),
+							ball1DampingVec)
 					ball2.velocity = vek.Add(vek.MulNumber(vek.Sub(ball2.velocity, ball2DampingVec), bounciness), ball2DampingVec)
 				}
 			}
@@ -124,6 +129,13 @@ func update() {
 
 		// Apply gravity
 		vek.Add_Inplace(ball.velocity, []float64{0.0, gravity})
+
+		// Apply mouse force
+		if p5.Event.Mouse.Pressed {
+			dir := vek.Sub(ball.pos, []float64{p5.Event.Mouse.Position.X, p5.Event.Mouse.Position.Y})
+			force := vek.MulNumber(dir, mouseForce(ball.pos)/5)
+			vek.Add_Inplace(ball.velocity, force)
+		}
 	}
 }
 
@@ -136,4 +148,17 @@ func draw() {
 	for _, ball := range balls {
 		p5.Circle(ball.pos[0], ball.pos[1], ball.r*2)
 	}
+}
+
+func mouseForce(pos []float64) float64 {
+	mousePos := []float64{p5.Event.Mouse.Position.X, p5.Event.Mouse.Position.Y}
+	force := 1 / (vek.Norm(vek.Sub(pos, mousePos)) / 2)
+	if force > 1 {
+		force = 1
+	} else if force < 0 {
+		force = 0
+	}
+
+	return force
+	// return math.Exp(-math.Pow(pos[0], 2) * -math.Pow(pos[1], 2))
 }
