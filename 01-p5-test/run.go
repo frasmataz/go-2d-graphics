@@ -16,11 +16,11 @@ type ball struct {
 
 var (
 	screenWidth  = 1000
-	screenHeight = 1000
-	ballCount    = 80
+	screenHeight = 800
+	ballCount    = 120
 	balls        []*ball
-	bounciness   = 0.8
-	gravity      = 0.0
+	bounciness   = 0.9
+	gravity      = 0.3
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 }
 
 func setup() {
-	p5.Canvas(screenHeight, screenWidth)
+	p5.Canvas(screenWidth, screenHeight)
 	p5.Background(color.Gray{Y: 80})
 
 	for range ballCount {
@@ -136,25 +136,4 @@ func draw() {
 	for _, ball := range balls {
 		p5.Circle(ball.pos[0], ball.pos[1], ball.r*2)
 	}
-}
-
-func distance(x1 float64, y1 float64, x2 float64, y2 float64) float64 {
-	return math.Sqrt(math.Pow((x2-x1), 2) + math.Pow((y2-y1), 2))
-}
-
-func vectorXYtoAngleMag(x float64, y float64) (a float64, m float64) {
-	a = math.Atan2(y, x)
-	if a < 0 {
-		a += math.Pi * 2
-	}
-
-	m = math.Sqrt(math.Pow(x, 2) + math.Pow(y, 2))
-
-	return a, m
-}
-
-func vectorAngleMagtoXY(a float64, m float64) (x float64, y float64) {
-	x = math.Sin(a) * m
-	y = math.Cos(a) * m
-	return x, y
 }
