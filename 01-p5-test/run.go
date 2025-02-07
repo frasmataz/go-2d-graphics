@@ -2,7 +2,6 @@ package main
 
 import (
 	"image/color"
-	"log"
 	"math"
 
 	"github.com/go-p5/p5"
@@ -18,7 +17,7 @@ type ball struct {
 var (
 	screenWidth  = 1000
 	screenHeight = 1000
-	ballCount    = 50
+	ballCount    = 80
 	balls        []*ball
 	bounciness   = 1.0001
 )
@@ -32,10 +31,10 @@ func setup() {
 	p5.Background(color.Gray{Y: 80})
 
 	for range ballCount {
-		size := p5.Random(20, 80)
+		size := p5.Random(20, 40)
 		balls = append(balls, &ball{
 			pos:      []float64{p5.Random(0, float64(screenWidth)), p5.Random(0, float64(screenWidth))},
-			velocity: vek.MulNumber([]float64{p5.Random(-100, 100), p5.Random(-100, 100)}, 1/size),
+			velocity: vek.MulNumber([]float64{p5.Random(-200, 200), p5.Random(-200, 200)}, 1/size),
 			r:        size,
 		})
 	}
@@ -79,34 +78,38 @@ func update() {
 				// Bump circles off each other
 				nudge := vek.MulNumber(deltaVec, ((ball.r+ball2.r)-deltaMag)/deltaMag)
 
+				mass1 := (math.Pi * math.Pow(ball.r, 2) * 10)
+				mass2 := (math.Pi * math.Pow(ball2.r, 2) * 10)
+
 				invMass1 := 1 / (math.Pi * math.Pow(ball.r, 2) * 10)
-				invMass2 := 1 / (math.Pi * math.Pow(ball2.r, 2*10))
+				invMass2 := 1 / (math.Pi * math.Pow(ball2.r, 2) * 10)
 
 				vek.Add_Inplace(ball.pos, vek.MulNumber(nudge, invMass1/(invMass1+invMass2)))
 				vek.Sub_Inplace(ball2.pos, vek.MulNumber(nudge, invMass1/(invMass1+invMass2)))
 
-				// Ricochet balls off each other
-				deltaVelocity := vek.Sub(ball.velocity, ball2.velocity)
-				deltaVelocityMag := vek.Dot(nudge, deltaVelocity)
+				// Elastic collisions - ported from https://www.plasmaphysics.org.uk/programs/coll2d_cpp.htm
+				// Precalc some values
+				m21 := mass2 / mass1
+				x21 := ball2.pos[0] - ball.pos[0]
+				y21 := ball2.pos[1] - ball.pos[1]
+				vx21 := ball2.velocity[0] - ball.velocity[0]
+				vy21 := ball2.velocity[1] - ball.velocity[1]
 
-				log.Printf("minBump: %v, delta: %v", nudge, deltaVelocity)
+				// vx_cm := (mass1*ball.velocity[0] + mass2*ball2.velocity[0]) / (mass1 / mass2)
+				// vy_cm := (mass1*ball.velocity[1] + mass2*ball2.velocity[1]) / (mass1 / mass2)
 
-				// If balls not moving away from each other already
-				if deltaVelocityMag < 0.0 {
-					log.Println("collide")
-					impulseForce := (deltaVelocityMag) / (invMass1 + invMass2)
-					impulseVec := vek.MulNumber(nudge, impulseForce)
+				// If balls are approaching:
+				if (vx21*x21 + vy21*y21) < 0 {
+					a := y21 / x21
+					dvx2 := -2 * (vx21 + a*vy21) / ((1 + a*a) * (1 + m21))
+					vx2 := ball2.velocity[0] + dvx2
+					vy2 := ball2.velocity[1] + a*dvx2
+					vx1 := ball.velocity[0] - m21*dvx2
+					vy1 := ball.velocity[1] - a*m21*dvx2
 
-					log.Printf("impulseForce: %v", impulseForce)
-					log.Printf("impulseVec: %v", impulseVec)
-
-					log.Printf("vel before: %v", ball.velocity)
-					vek.Add_Inplace(ball.velocity, vek.MulNumber(impulseVec, invMass1))
-					vek.Sub_Inplace(ball2.velocity, vek.MulNumber(impulseVec, invMass2))
-					log.Printf("vel after: %v", ball.velocity)
+					ball.velocity = []float64{vx1, vy1}
+					ball2.velocity = []float64{vx2, vy2}
 				}
-
-				log.Println("done colliding")
 			}
 		}
 		vek.Add_Inplace(ball.pos, ball.velocity)
