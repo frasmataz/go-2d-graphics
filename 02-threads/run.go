@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"log"
@@ -16,11 +17,12 @@ type imageSegment struct {
 }
 
 var (
-	screenWidth  = 1000
-	screenHeight = 800
-	threads      = 12
-	framerate    = int64(1000 / 60)
-	pixelpipe    chan imageSegment
+	screenWidth       = 1000
+	screenHeight      = 800
+	threads           = 12
+	fpsUpdateInterval = time.Millisecond * 100
+	lastFpsUpdate     = time.Now()
+	frameCount        = 0
 )
 
 func main() {
@@ -28,69 +30,72 @@ func main() {
 }
 
 func setup() {
-	pixelpipe = make(chan imageSegment)
 	p5.Canvas(screenWidth, screenHeight)
 	p5.Background(color.Gray{Y: 80})
+}
+
+func draw() {
+	imageChannels := make([]chan imageSegment, threads)
+
 	for thread := range threads {
-		log.Printf("thread %v starting", thread)
+		imageChannels[thread] = make(chan imageSegment)
+
 		go func(thread int) {
-			time.Sleep(time.Second)
-			log.Printf("thread %v started", thread)
 			segmentHeight := screenHeight / threads
 			segmentWidth := screenWidth
 
 			segmentTop := segmentHeight * thread
 			segmentLeft := 0
 
-			for {
-				image := image.NewNRGBA(
-					image.Rectangle{
-						image.Point{
-							0,
-							0,
-						},
-						image.Point{
-							segmentWidth,
-							segmentHeight,
-						},
+			image := image.NewNRGBA(
+				image.Rectangle{
+					image.Point{
+						0,
+						0,
 					},
-				)
+					image.Point{
+						segmentWidth,
+						segmentHeight,
+					},
+				},
+			)
 
-				for x := range image.Rect.Size().X {
-					for y := range image.Rect.Size().Y {
-						image.SetNRGBA(x, y, color.NRGBA{
-							uint8(x + segmentTop + y),
-							uint8(x + segmentTop - y),
-							uint8(x + segmentTop*y),
-							255,
-						})
-					}
-				}
-
-				log.Printf("thread %v posting", thread)
-				pixelpipe <- imageSegment{
-					image: image,
-					x:     segmentLeft,
-					y:     segmentTop,
+			for x := range image.Rect.Size().X {
+				for y := range image.Rect.Size().Y {
+					image.SetNRGBA(x, y, color.NRGBA{
+						uint8(x + segmentTop + y),
+						uint8(x + segmentTop - y),
+						uint8(x + segmentTop*y),
+						255,
+					})
 				}
 			}
+
+			imageChannels[thread] <- imageSegment{
+				image: image,
+				x:     segmentLeft,
+				y:     segmentTop,
+			}
+
+			close(imageChannels[thread])
 		}(thread)
 	}
-}
 
-func draw() {
-	for {
-		log.Println("draw starting")
-		startTime := time.Now().UnixMilli()
+	for thread := range threads {
+		imageSeg := <-imageChannels[thread]
+		p5.DrawImage(imageSeg.image, float64(imageSeg.x), float64(imageSeg.y))
+	}
 
-		imageSegment := <-pixelpipe
+	p5.TextSize(50)
+	p5.Text(fmt.Sprintf("%v frames", frameCount), 10, 10)
+	frameCount++
 
-		p5.DrawImage(imageSegment.image, float64(imageSegment.x), float64(imageSegment.y))
+	log.Printf("now %v, next %v", time.Now(), lastFpsUpdate.Add(time.Millisecond*fpsUpdateInterval))
 
-		endTime := time.Now().UnixMilli()
-		log.Printf("start: %v, end: %v, framerate: %v", startTime, endTime, framerate)
-		if endTime-startTime > framerate {
-			return
-		}
+	if time.Now().Compare(lastFpsUpdate.Add(time.Millisecond*fpsUpdateInterval)) < 0 {
+		p5.TextSize(50)
+		p5.Text(fmt.Sprintf("%v frames", frameCount), 50, 50)
+		frameCount = 0
+		lastFpsUpdate = time.Now()
 	}
 }
