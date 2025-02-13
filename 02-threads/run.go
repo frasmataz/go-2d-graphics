@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
 	"time"
 
 	"github.com/go-p5/p5"
@@ -17,12 +16,13 @@ type imageSegment struct {
 }
 
 var (
-	screenWidth       = 1000
-	screenHeight      = 800
-	threads           = 12
-	fpsUpdateInterval = time.Millisecond * 100
-	lastFpsUpdate     = time.Now()
-	frameCount        = 0
+	screenWidth         = 1000
+	screenHeight        = 800
+	threads             = 12
+	fpsUpdateInterval   = 1000 * time.Millisecond
+	nextFpsUpdate       = time.Now().Add(fpsUpdateInterval)
+	frameCount          = 0
+	displayedFrameCount = 0
 )
 
 func main() {
@@ -87,15 +87,12 @@ func draw() {
 	}
 
 	p5.TextSize(50)
-	p5.Text(fmt.Sprintf("%v frames", frameCount), 10, 10)
+	p5.Text(fmt.Sprintf("%v fps", displayedFrameCount), 50, 50)
 	frameCount++
 
-	log.Printf("now %v, next %v", time.Now(), lastFpsUpdate.Add(time.Millisecond*fpsUpdateInterval))
-
-	if time.Now().Compare(lastFpsUpdate.Add(time.Millisecond*fpsUpdateInterval)) < 0 {
-		p5.TextSize(50)
-		p5.Text(fmt.Sprintf("%v frames", frameCount), 50, 50)
+	if time.Now().After(nextFpsUpdate) {
+		displayedFrameCount = frameCount
 		frameCount = 0
-		lastFpsUpdate = time.Now()
+		nextFpsUpdate = time.Now().Add(fpsUpdateInterval)
 	}
 }
