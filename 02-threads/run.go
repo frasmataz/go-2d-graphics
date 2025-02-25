@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math"
 	"time"
 
 	"gioui.org/io/key"
@@ -119,11 +118,13 @@ func renderMandelbrot(x float64, y float64) uint {
 	iteration := uint(0)
 
 	for {
-		if math.Pow(cursorx, 2)+math.Pow(cursory, 2) >= 4.0 || iteration >= mandelbrot.iterations {
+		cursorxsq := cursorx * cursorx
+		cursorysq := cursory * cursory
+		if cursorxsq+cursorysq >= 4.0 || iteration >= mandelbrot.iterations {
 			return iteration
 		}
 
-		xtemp := math.Pow(cursorx, 2) - math.Pow(cursory, 2) + x
+		xtemp := cursorxsq - cursorysq + x
 		cursory = 2*cursorx*cursory + y
 		cursorx = xtemp
 		iteration++
