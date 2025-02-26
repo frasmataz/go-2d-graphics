@@ -11,9 +11,10 @@ import (
 )
 
 type imageSegment struct {
-	image image.Image
-	x     int
-	y     int
+	thread int
+	image  image.Image
+	x      int
+	y      int
 }
 
 type mandelbrotState struct {
@@ -32,16 +33,19 @@ var (
 	screenWidth         = 1200
 	screenHeight        = 800
 	threads             = 24
+	targetFrameTime     = 20 * time.Millisecond
 	fpsUpdateInterval   = 1000 * time.Millisecond
 	nextFpsUpdate       = time.Now().Add(fpsUpdateInterval)
 	frameCount          = 0
 	displayedFrameCount = 0
 
-	panSpeed  = float64(0.1)
-	zoomSpeed = float64(0.05)
+	panSpeed     = float64(0.1)
+	zoomSpeed    = float64(0.05)
+	imageChannel = make(chan imageSegment)
+	imageBuffer  = make([]*imageSegment, threads)
 
 	mandelbrot = mandelbrotState{
-		iterations: 20,
+		iterations: 200,
 		zoom:       1.5,
 		pos: struct {
 			x float64
@@ -56,31 +60,33 @@ func main() {
 
 func setup() {
 	p5.Canvas(screenWidth, screenHeight)
+	for thread := range threads {
+		go processSegment(thread, &imageChannel)
+	}
 }
 
 func draw() {
 	processInput()
+	now := time.Now()
+	nextFrameTime := now.Add(targetFrameTime)
 
-	imageChannels := make([]chan imageSegment, threads)
+	for {
+		now := time.Now()
+		if nextFrameTime.Before(now) {
+			break
+		}
 
-	for thread := range threads {
-		imageChannels[thread] = make(chan imageSegment)
-
-		go processSegment(thread, &imageChannels[thread])
+		imageSeg := <-imageChannel
+		imageBuffer[imageSeg.thread] = &imageSeg
 	}
 
-	for thread := range threads {
-		imageSeg := <-imageChannels[thread]
-		p5.DrawImage(imageSeg.image, float64(imageSeg.x), float64(imageSeg.y))
+	for _, seg := range imageBuffer {
+		if seg != nil {
+			p5.DrawImage(seg.image, float64(seg.x), float64(seg.y))
+		}
 	}
 
 	p5.TextSize(50)
-	p5.Fill(color.NRGBA{
-		200,
-		200,
-		200,
-		255,
-	})
 	p5.Text(fmt.Sprintf("%v fps", displayedFrameCount), 50, 50)
 	frameCount++
 
@@ -89,6 +95,7 @@ func draw() {
 		frameCount = 0
 		nextFpsUpdate = time.Now().Add(fpsUpdateInterval)
 	}
+
 }
 
 func processInput() {
@@ -138,43 +145,44 @@ func processSegment(thread int, imageChannel *chan imageSegment) {
 	segmentTop := segmentHeight * thread
 	segmentLeft := 0
 
-	image := image.NewNRGBA(
-		image.Rectangle{
-			image.Point{
-				0,
-				0,
+	for {
+		image := image.NewNRGBA(
+			image.Rectangle{
+				image.Point{
+					0,
+					0,
+				},
+				image.Point{
+					segmentWidth,
+					segmentHeight,
+				},
 			},
-			image.Point{
-				segmentWidth,
-				segmentHeight,
-			},
-		},
-	)
+		)
 
-	for x := range image.Rect.Size().X {
-		for y := range image.Rect.Size().Y {
-			segx := x
-			segy := (segmentHeight * thread) + y
+		for x := range image.Rect.Size().X {
+			for y := range image.Rect.Size().Y {
+				segx := x
+				segy := (segmentHeight * thread) + y
 
-			mbx := ((float64(segx) / float64(segmentWidth) * 1.5) * mandelbrot.zoom) + mandelbrot.pos.x
-			mby := ((float64(segy) / float64(screenHeight)) * mandelbrot.zoom) + mandelbrot.pos.y
+				mbx := ((float64(segx) / float64(segmentWidth) * 1.5) * mandelbrot.zoom) + mandelbrot.pos.x
+				mby := ((float64(segy) / float64(screenHeight)) * mandelbrot.zoom) + mandelbrot.pos.y
 
-			mbResult := renderMandelbrot(mbx, mby)
+				mbResult := renderMandelbrot(mbx, mby)
 
-			image.SetNRGBA(x, y, color.NRGBA{
-				uint8(mbResult * 50),
-				uint8(mbResult * 10),
-				uint8(mbResult * 70),
-				255,
-			})
+				image.SetNRGBA(x, y, color.NRGBA{
+					uint8(mbResult * 50),
+					uint8(mbResult * 10),
+					uint8(mbResult * 70),
+					255,
+				})
+			}
+		}
+
+		*imageChannel <- imageSegment{
+			thread: thread,
+			image:  image,
+			x:      segmentLeft,
+			y:      segmentTop,
 		}
 	}
-
-	*imageChannel <- imageSegment{
-		image: image,
-		x:     segmentLeft,
-		y:     segmentTop,
-	}
-
-	close(*imageChannel)
 }
