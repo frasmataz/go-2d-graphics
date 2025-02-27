@@ -30,27 +30,29 @@ type mandelbrotState struct {
 }
 
 var (
-	screenWidth         = 1200
-	screenHeight        = 800
+	screenWidth         = 1800
+	screenHeight        = 1000
 	threads             = 24
+	segmentsx           = 0 //Calculated at setup
+	segmentsy           = 0
 	targetFrameTime     = 20 * time.Millisecond
 	fpsUpdateInterval   = 1000 * time.Millisecond
 	nextFpsUpdate       = time.Now().Add(fpsUpdateInterval)
 	frameCount          = 0
 	displayedFrameCount = 0
 
-	panSpeed     = float64(0.1)
+	panSpeed     = float64(0.2)
 	zoomSpeed    = float64(0.05)
 	imageChannel = make(chan imageSegment)
 	imageBuffer  = make([]*imageSegment, threads)
 
 	mandelbrot = mandelbrotState{
-		iterations: 200,
-		zoom:       1.5,
+		iterations: 256,
+		zoom:       0.5,
 		pos: struct {
 			x float64
 			y float64
-		}{-2.0, -0.5},
+		}{-0.5, -0.0},
 	}
 )
 
@@ -59,6 +61,28 @@ func main() {
 }
 
 func setup() {
+	// Determine most square-y canvas segmenting for number of threads
+	// Get factors of number of threads
+	var factors []int
+	for i := 1; i <= threads; i++ {
+		if threads%i == 0 {
+			factors = append(factors, i)
+		}
+	}
+
+	// Find midpoint of factors list
+	if len(factors)%2 == 0 {
+		// If even, take middle two factors as x/y segment count
+		segmentsy = factors[len(factors)/2-1]
+		segmentsx = factors[(len(factors) / 2)]
+	} else {
+		// If odd, threads is a square number - take middle factor for both x and y
+		segmentsy = factors[(len(factors) / 2)]
+		segmentsx = factors[(len(factors) / 2)]
+	}
+
+	fmt.Printf("threads: %v, seg x: %v, seg y: %v, factors: %v", threads, segmentsx, segmentsy, factors)
+
 	p5.Canvas(screenWidth, screenHeight)
 	for thread := range threads {
 		go processSegment(thread, &imageChannel)
@@ -71,8 +95,7 @@ func draw() {
 	nextFrameTime := now.Add(targetFrameTime)
 
 	for {
-		now := time.Now()
-		if nextFrameTime.Before(now) {
+		if time.Now().After(nextFrameTime) {
 			break
 		}
 
@@ -112,9 +135,9 @@ func processInput() {
 	}
 
 	if p5.KeyIsDown(key.NamePageUp) {
-		mandelbrot.zoom += (zoomSpeed * mandelbrot.zoom)
-	} else if p5.KeyIsDown(key.NamePageDown) {
 		mandelbrot.zoom -= (zoomSpeed * mandelbrot.zoom)
+	} else if p5.KeyIsDown(key.NamePageDown) {
+		mandelbrot.zoom += (zoomSpeed * mandelbrot.zoom)
 	}
 
 }
@@ -139,11 +162,14 @@ func renderMandelbrot(x float64, y float64) uint {
 }
 
 func processSegment(thread int, imageChannel *chan imageSegment) {
-	segmentHeight := screenHeight / threads
-	segmentWidth := screenWidth
+	xpos := thread % segmentsx
+	ypos := thread / segmentsx
 
-	segmentTop := segmentHeight * thread
-	segmentLeft := 0
+	segmentHeight := screenHeight / segmentsy
+	segmentWidth := screenWidth / segmentsx
+
+	segmentTop := segmentHeight * ypos
+	segmentLeft := segmentWidth * xpos
 
 	for {
 		image := image.NewNRGBA(
@@ -161,18 +187,18 @@ func processSegment(thread int, imageChannel *chan imageSegment) {
 
 		for x := range image.Rect.Size().X {
 			for y := range image.Rect.Size().Y {
-				segx := x
-				segy := (segmentHeight * thread) + y
+				segx := (segmentWidth * xpos) + x - (screenWidth / 2)
+				segy := (segmentHeight * ypos) + y - (screenHeight / 2)
 
-				mbx := ((float64(segx) / float64(segmentWidth) * 1.5) * mandelbrot.zoom) + mandelbrot.pos.x
-				mby := ((float64(segy) / float64(screenHeight)) * mandelbrot.zoom) + mandelbrot.pos.y
+				mbx := ((float64(segx) / float64(segmentWidth)) * mandelbrot.zoom) + mandelbrot.pos.x
+				mby := ((float64(segy) / float64(segmentHeight)) * mandelbrot.zoom) + mandelbrot.pos.y
 
 				mbResult := renderMandelbrot(mbx, mby)
 
 				image.SetNRGBA(x, y, color.NRGBA{
-					uint8(mbResult * 50),
-					uint8(mbResult * 10),
-					uint8(mbResult * 70),
+					uint8(mbResult),
+					uint8(mbResult * 2),
+					uint8(mbResult * 8),
 					255,
 				})
 			}
