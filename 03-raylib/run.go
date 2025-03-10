@@ -11,7 +11,7 @@ import (
 
 type imageSegment struct {
 	thread int32
-	image  image.Image
+	pixels []color.RGBA
 	x      int32
 	y      int32
 }
@@ -34,6 +34,8 @@ var (
 	threads             = int32(24)
 	segmentsx           = int32(0) //Calculated at setup
 	segmentsy           = int32(0)
+	segmentHeight       = int32(0)
+	segmentWidth        = int32(0)
 	targetFrameTime     = 20 * time.Millisecond
 	targetFPS           = 60
 	fpsUpdateInterval   = 1000 * time.Millisecond
@@ -41,10 +43,11 @@ var (
 	frameCount          = 0
 	displayedFrameCount = 0
 
-	panSpeed     = float64(0.2)
-	zoomSpeed    = float64(0.05)
-	imageChannel = make(chan imageSegment)
-	imageBuffer  = make([]*imageSegment, threads)
+	panSpeed      = float64(0.2)
+	zoomSpeed     = float64(0.05)
+	imageChannel  = make(chan imageSegment)
+	imageBuffer   = make([]*imageSegment, threads)
+	screenTexture rl.Texture2D
 
 	mandelbrot = mandelbrotState{
 		iterations: 256,
@@ -59,6 +62,13 @@ var (
 func main() {
 	rl.InitWindow(screenWidth, screenHeight, "mandelbrot raylib")
 	rl.SetTargetFPS(60)
+
+	screenRect := image.Rect(0, 0, int(screenWidth), int(screenHeight))
+	screenImg := image.NewRGBA(screenRect)
+
+	screenTexture = rl.LoadTextureFromImage(
+		rl.NewImageFromImage(screenImg),
+	)
 
 	// Determine most square-y canvas segmenting for number of threads
 	// Get factors of number of threads
@@ -79,6 +89,9 @@ func main() {
 		segmentsy = factors[(len(factors) / 2)]
 		segmentsx = factors[(len(factors) / 2)]
 	}
+
+	segmentHeight = screenHeight / segmentsy
+	segmentWidth = screenWidth / segmentsx
 
 	fmt.Printf("threads: %v, seg x: %v, seg y: %v, factors: %v", threads, segmentsx, segmentsy, factors)
 
@@ -109,24 +122,16 @@ func draw() {
 
 	for _, seg := range imageBuffer {
 		if seg != nil {
-			img := rl.NewImageFromImage(seg.image)
-			tex := rl.LoadTextureFromImage(img)
-			rl.DrawTexture(tex, int32(seg.x), int32(seg.y), rl.White)
+			rl.UpdateTextureRec(
+				screenTexture,
+				rl.NewRectangle(float32(seg.x), float32(seg.y), float32(segmentWidth), float32(segmentHeight)),
+				seg.pixels,
+			)
 		}
 	}
+	rl.DrawTexture(screenTexture, 0, 0, rl.White)
 
 	rl.EndDrawing()
-
-	// p5.TextSize(50)
-	// // p5.Text(fmt.Sprintf("%v fps", displayedFrameCount), 50, 50)
-	// frameCount++
-
-	// if time.Now().After(nextFpsUpdate) {
-	// 	displayedFrameCount = frameCount
-	// 	frameCount = 0
-	// 	nextFpsUpdate = time.Now().Add(fpsUpdateInterval)
-	// }
-
 }
 
 func processInput() {
@@ -144,10 +149,8 @@ func processInput() {
 
 	if rl.IsKeyDown(rl.KeyPageUp) {
 		mandelbrot.zoom -= (zoomSpeed * mandelbrot.zoom)
-		time.Sleep(time.Second * 1)
 	} else if rl.IsKeyDown(rl.KeyPageDown) {
 		mandelbrot.zoom += (zoomSpeed * mandelbrot.zoom)
-		time.Sleep(time.Second * 1)
 	}
 
 	if rl.IsKeyDown(rl.KeyHome) {
@@ -178,11 +181,10 @@ func renderMandelbrot(x float64, y float64) uint {
 }
 
 func processSegment(thread int32, imageChannel *chan imageSegment) {
+	pixels := make([]color.RGBA, segmentWidth*segmentHeight)
+
 	xpos := thread % segmentsx
 	ypos := thread / segmentsx
-
-	segmentHeight := screenHeight / segmentsy
-	segmentWidth := screenWidth / segmentsx
 
 	segmentTop := segmentHeight * ypos
 	segmentLeft := segmentWidth * xpos
@@ -211,18 +213,20 @@ func processSegment(thread int32, imageChannel *chan imageSegment) {
 
 				mbResult := renderMandelbrot(mbx, mby)
 
-				image.SetNRGBA(x, y, color.NRGBA{
+				color := color.RGBA{
 					uint8(mbResult),
 					uint8(mbResult * 2),
 					uint8(mbResult * 8),
 					255,
-				})
+				}
+
+				pixels[y*int(segmentWidth)+x] = color
 			}
 		}
 
 		*imageChannel <- imageSegment{
 			thread: thread,
-			image:  image,
+			pixels: pixels,
 			x:      segmentLeft,
 			y:      segmentTop,
 		}
